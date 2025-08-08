@@ -245,6 +245,15 @@ export default function WalletsScreen() {
     return totalValue;
   };
 
+  // Calculate total value of all wallets
+  const calculateTotalPortfolioValue = (): number => {
+    return wallets.reduce((total, wallet) => {
+      return total + calculateWalletTotalValue(wallet);
+    }, 0);
+  };
+
+  const totalPortfolioValue = calculateTotalPortfolioValue();
+
   const renderWalletItem = ({ item }: { item: Wallet }) => {
     const totalValue = calculateWalletTotalValue(item);
 
@@ -255,7 +264,7 @@ export default function WalletsScreen() {
             {/* Wallet Address Header */}
             <View style={styles.walletAddressHeader}>
               <View style={styles.walletIconContainer}>
-                <Text style={styles.walletIcon}>👛</Text>
+                <Text style={styles.walletIcon}>💳</Text>
               </View>
               <View style={styles.addressContainer}>
                 <Text style={styles.walletLabel}>Wallet Address</Text>
@@ -289,18 +298,6 @@ export default function WalletsScreen() {
               </Text>
             </View>
             
-            {/* Asset Summary */}
-            <View style={styles.assetSummary}>
-              <View style={styles.assetItem}>
-                <Text style={styles.assetLabel}>ETH Balance</Text>
-                <Text style={styles.assetValue}>{item.balance || '0'} ETH</Text>
-              </View>
-              <View style={styles.assetItem}>
-                <Text style={styles.assetLabel}>Other Tokens</Text>
-                <Text style={styles.assetValue}>{item.tokens?.length || 0} tokens</Text>
-              </View>
-            </View>
-            
             <View style={styles.tapHint}>
               <Text style={styles.tapHintText}>Tap to view detailed holdings →</Text>
             </View>
@@ -313,8 +310,19 @@ export default function WalletsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text variant="headlineMedium" style={styles.title}>My Hypefolio</Text>
+        <Text variant="headlineMedium" style={styles.title}>My Pocket</Text>
       </View>
+      
+      {/* Total Portfolio Value */}
+      {wallets.length > 0 && (
+        <View style={styles.totalPortfolioSection}>
+          <Text style={styles.totalPortfolioLabel}>Total Portfolio Value</Text>
+          <Text style={styles.totalPortfolioValue}>
+            ${totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </Text>
+          <Text style={styles.totalPortfolioSubtext}>{wallets.length} wallet{wallets.length !== 1 ? 's' : ''}</Text>
+        </View>
+      )}
       
       {showAddWallet ? (
         <Card style={styles.addWalletCard}>
@@ -557,27 +565,40 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   totalValueAmount: {
-    fontSize: 24,
+    fontSize: 20,
     color: '#A0522D', // Rich brown from swatch
     fontWeight: 'bold',
   },
-  assetSummary: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  assetItem: {
-    flex: 1,
+  totalPortfolioSection: {
+    backgroundColor: '#FFFFFF', // Pure white card
+    margin: 16,
+    marginTop: 8,
+    padding: 20,
+    borderRadius: 16,
     alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#A0522D', // Rich brown shadow
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E8DDD0', // Light beige border
   },
-  assetLabel: {
-    fontSize: 12,
+  totalPortfolioLabel: {
+    fontSize: 16,
     color: '#8B7355', // Muted brown
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  totalPortfolioValue: {
+    fontSize: 32,
+    color: '#A0522D', // Rich brown accent
+    fontWeight: 'bold',
     marginBottom: 4,
   },
-  assetValue: {
+  totalPortfolioSubtext: {
     fontSize: 14,
-    color: '#333',
-    fontWeight: '600',
+    color: '#8B7355', // Muted brown
+    fontWeight: '400',
   },
 });
