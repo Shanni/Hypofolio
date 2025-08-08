@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
   },
   marketSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: '#8B7355', // Muted brown
   },
   searchSection: {
     paddingHorizontal: 16,
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: '#8B7355', // Muted brown
   },
   tokenList: {
     flex: 1,

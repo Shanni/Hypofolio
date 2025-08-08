@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
   emptyText: {
     marginBottom: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#8B7355', // Muted brown
   },
   addButton: {
     marginTop: 8,
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
   },
   tokenCount: {
     fontSize: 14,
-    color: '#666',
+    color: '#8B7355', // Muted brown
   },
   tapHint: {
     marginTop: 8,
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
   },
   walletLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#8B7355', // Muted brown
     fontWeight: '500',
     marginBottom: 2,
   },
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
   },
   totalValueLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#8B7355', // Muted brown
     fontWeight: '500',
     marginBottom: 4,
   },
@@ -572,7 +572,7 @@ const styles = StyleSheet.create({
   },
   assetLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#8B7355', // Muted brown
     marginBottom: 4,
   },
   assetValue: {
