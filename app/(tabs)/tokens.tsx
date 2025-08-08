@@ -272,14 +272,16 @@ export default function TokensScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F0E8', // Light beige from swatch
   },
   marketHeader: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF', // Pure white
     paddingHorizontal: 20,
     paddingVertical: 20,
     marginBottom: 16,
     alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8DDD0', // Light beige border
   },
   marketTitle: {
     fontSize: 24,
@@ -304,7 +306,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   filterChip: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF', // Pure white
   },
   chipText: {
     fontSize: 12,
@@ -313,9 +315,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: '#F5F0E8', // Light beige from swatch
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#E8DDD0', // Light beige border
   },
   headerText: {
     flex: 1,
@@ -325,7 +327,7 @@ const styles = StyleSheet.create({
   },
   tokenList: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF', // Pure white
   },
   tokenRow: {
     flexDirection: 'row',
@@ -333,7 +335,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#E8DDD0', // Light beige border
   },
   tokenInfo: {
     flex: 1,

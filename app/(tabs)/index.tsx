@@ -208,23 +208,58 @@ export default function WalletsScreen() {
     router.push(`/wallet/${wallet.address}`);
   };
 
+  // Helper functions for price calculation
+  const getMockPrice = (symbol: string): number => {
+    const prices: { [key: string]: number } = {
+      'ETH': 2300,
+      'BTC': 45000,
+      'USDT': 1,
+      'USDC': 1,
+      'LINK': 15,
+      'UNI': 8,
+      'AAVE': 120,
+      'COMP': 80,
+    };
+    return prices[symbol] || Math.random() * 100;
+  };
+
+  const calculateWalletTotalValue = (wallet: Wallet): number => {
+    let totalValue = 0;
+    
+    // Add ETH balance value
+    if (wallet.balance && parseFloat(wallet.balance) > 0) {
+      const ethBalance = parseFloat(wallet.balance);
+      const ethPrice = getMockPrice('ETH');
+      totalValue += ethBalance * ethPrice;
+    }
+    
+    // Add token values
+    if (wallet.tokens) {
+      wallet.tokens.forEach(token => {
+        const balance = parseFloat(token.balance);
+        const price = getMockPrice(token.symbol);
+        totalValue += balance * price;
+      });
+    }
+    
+    return totalValue;
+  };
+
   const renderWalletItem = ({ item }: { item: Wallet }) => {
-    const totalTokenValue = item.tokens ? item.tokens.reduce((sum: number, token: Token) => {
-      // Mock token prices for demonstration
-      const tokenPrice = token.symbol === 'USDT' || token.symbol === 'USDC' ? 1 : Math.random() * 10;
-      return sum + (parseFloat(token.balance) * tokenPrice);
-    }, 0) : 0;
+    const totalValue = calculateWalletTotalValue(item);
 
     return (
       <TouchableOpacity onPress={() => handleWalletPress(item)}>
         <Card style={styles.walletCard}>
           <Card.Content>
-            <View style={styles.walletHeader}>
-              <View style={styles.walletInfo}>
-                <Text style={styles.walletAddress}>
-                  {item.address.slice(0, 6)}...{item.address.slice(-4)}
-                </Text>
-                <Text style={styles.walletBalance}>{item.balance} ETH</Text>
+            {/* Wallet Address Header */}
+            <View style={styles.walletAddressHeader}>
+              <View style={styles.walletIconContainer}>
+                <Text style={styles.walletIcon}>👛</Text>
+              </View>
+              <View style={styles.addressContainer}>
+                <Text style={styles.walletLabel}>Wallet Address</Text>
+                <Text style={styles.fullWalletAddress}>{item.address}</Text>
               </View>
               <View style={styles.walletActions}>
                 <IconButton
@@ -246,17 +281,28 @@ export default function WalletsScreen() {
               </View>
             </View>
             
-            <View style={styles.walletStats}>
-              <Text style={styles.tokenCount}>
-                {item.tokens?.length || 0} tokens
-              </Text>
-              <Text style={styles.totalValue}>
-                ~${totalTokenValue.toFixed(2)}
+            {/* Total Portfolio Value */}
+            <View style={styles.totalValueSection}>
+              <Text style={styles.totalValueLabel}>Total Portfolio Value</Text>
+              <Text style={styles.totalValueAmount}>
+                ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
             
+            {/* Asset Summary */}
+            <View style={styles.assetSummary}>
+              <View style={styles.assetItem}>
+                <Text style={styles.assetLabel}>ETH Balance</Text>
+                <Text style={styles.assetValue}>{item.balance || '0'} ETH</Text>
+              </View>
+              <View style={styles.assetItem}>
+                <Text style={styles.assetLabel}>Other Tokens</Text>
+                <Text style={styles.assetValue}>{item.tokens?.length || 0} tokens</Text>
+              </View>
+            </View>
+            
             <View style={styles.tapHint}>
-              <Text style={styles.tapHintText}>Tap to view tokens →</Text>
+              <Text style={styles.tapHintText}>Tap to view detailed holdings →</Text>
             </View>
           </Card.Content>
         </Card>
@@ -267,7 +313,7 @@ export default function WalletsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text variant="headlineMedium" style={styles.title}>My Wallets</Text>
+        <Text variant="headlineMedium" style={styles.title}>My Hypefolio</Text>
       </View>
       
       {showAddWallet ? (
@@ -340,11 +386,11 @@ export default function WalletsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F0E8', // Light beige from swatch
   },
   header: {
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF', // Pure white for contrast
   },
   title: {
     fontWeight: 'bold',
@@ -368,7 +414,15 @@ const styles = StyleSheet.create({
   },
   walletCard: {
     marginBottom: 16,
-    borderRadius: 8,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF', // Pure white card background
+    elevation: 3,
+    shadowColor: '#A0522D', // Rich brown shadow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E8DDD0', // Light beige border
   },
   walletHeader: {
     flexDirection: 'row',
@@ -451,5 +505,79 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 0,
+  },
+  // New wallet display styles
+  walletAddressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  walletIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5F0E8', // Light beige from swatch
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+  },
+  walletIcon: {
+    fontSize: 20,
+  },
+  addressContainer: {
+    flex: 1,
+  },
+  walletLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  fullWalletAddress: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+    fontFamily: 'monospace',
+  },
+  totalValueSection: {
+    backgroundColor: '#F5F0E8', // Light beige from swatch
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E8DDD0', // Light beige border
+  },
+  totalValueLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  totalValueAmount: {
+    fontSize: 24,
+    color: '#A0522D', // Rich brown from swatch
+    fontWeight: 'bold',
+  },
+  assetSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  assetItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  assetLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  assetValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
   },
 });

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { Text, Card, IconButton, ActivityIndicator } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiUrl, API_CONFIG } from '../../src/config/api';
 
@@ -222,23 +222,13 @@ export default function WalletDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <IconButton icon="arrow-left" size={24} iconColor="#333" />
+      {/* Simple Header */}
+      {/* <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <IconButton icon="arrow-left" size={24} />
         </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>{formatAddress(wallet.address)}</Text>
-        </View>
-      </View>
-
-      {/* Portfolio Summary */}
-      <View style={styles.portfolioSummary}>
-        <View style={styles.summaryCardFull}>
-          <Text style={styles.summaryLabel}>Total Portfolio Value</Text>
-          <Text style={styles.summaryValue}>${totalValue.toFixed(2)}</Text>
-        </View>
-      </View>
+        <Text style={styles.headerTitle}>Wallet Details</Text>
+      </View> */}
 
       {/* Tokens List */}
       <View style={styles.tokensSection}>
@@ -268,30 +258,23 @@ export default function WalletDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F0E8', // Light beige from swatch
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
+    padding: 16,
+    backgroundColor: '#FFFFFF', // Pure white
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  headerContent: {
-    flex: 1,
-    marginLeft: 8,
+    borderBottomColor: '#E8DDD0', // Light beige border
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '600',
+    marginLeft: 8,
   },
-  walletAddress: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
+  backButton: {
+    marginRight: 8,
   },
   portfolioSummary: {
     flexDirection: 'row',
@@ -301,25 +284,29 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF', // Pure white
     padding: 16,
     borderRadius: 12,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#A0522D', // Rich brown shadow
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E8DDD0', // Light beige border
   },
   summaryCardFull: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F5F0E8', // Light beige from swatch
     padding: 20,
     borderRadius: 12,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#A0522D', // Rich brown shadow
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 4,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E8DDD0', // Light beige border
   },
   summaryLabel: {
     fontSize: 12,
@@ -347,10 +334,14 @@ const styles = StyleSheet.create({
   tokenCard: {
     marginBottom: 12,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#A0522D', // Rich brown shadow
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 4,
+    backgroundColor: '#FFFFFF', // Pure white background
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8DDD0', // Light beige border
   },
   tokenContent: {
     padding: 16,
@@ -421,11 +412,7 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 16,
   },
-  backButton: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
+
   emptyState: {
     flex: 1,
     justifyContent: 'center',
