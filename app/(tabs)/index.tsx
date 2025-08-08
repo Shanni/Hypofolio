@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { Text, Card, Button, TextInput, IconButton, ActivityIndicator, FAB } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 // Using localStorage for web or AsyncStorage for React Native
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // Import API configuration
@@ -21,6 +22,7 @@ interface Wallet {
 }
 
 export default function WalletsScreen() {
+  const router = useRouter();
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
@@ -202,60 +204,63 @@ export default function WalletsScreen() {
     }
   };
 
+  const handleWalletPress = (wallet: Wallet) => {
+    router.push(`/wallet/${wallet.address}`);
+  };
+
   const renderWalletItem = ({ item }: { item: Wallet }) => {
     const totalTokenValue = item.tokens ? item.tokens.reduce((sum: number, token: Token) => {
       // Mock token prices for demonstration
       const tokenPrice = token.symbol === 'USDT' || token.symbol === 'USDC' ? 1 : Math.random() * 10;
       return sum + (parseFloat(token.balance) * tokenPrice);
     }, 0) : 0;
-    
-    // Mock ETH price at $3000
-    const ethValue = parseFloat(item.balance) * 3000;
-    const totalValue = ethValue + totalTokenValue;
 
     return (
-      <Card style={styles.walletCard}>
-        <Card.Content>
-          <View style={styles.walletHeader}>
-            <Text variant="titleMedium" numberOfLines={1} style={styles.addressText}>
-              {item.address}
-            </Text>
-            <View style={styles.walletActions}>
-              <IconButton 
-                icon="refresh" 
-                size={20} 
-                onPress={() => handleRefreshWallet(item.address)} 
-              />
-              <IconButton 
-                icon="delete-outline" 
-                size={20} 
-                onPress={() => handleRemoveWallet(item.address)} 
-              />
-            </View>
-          </View>
-          
-          <View style={styles.balanceContainer}>
-            <View style={styles.balanceItem}>
-              <Text variant="bodyMedium">ETH Balance</Text>
-              <Text variant="titleMedium">{parseFloat(item.balance).toFixed(4)} ETH</Text>
-              <Text variant="bodySmall">${ethValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
-            </View>
-            
-            <View style={styles.balanceItem}>
-              <Text variant="bodyMedium">Tokens</Text>
-              <Text variant="titleMedium">{item.tokens ? item.tokens.length : 0}</Text>
-              <Text variant="bodySmall">${totalTokenValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+      <TouchableOpacity onPress={() => handleWalletPress(item)}>
+        <Card style={styles.walletCard}>
+          <Card.Content>
+            <View style={styles.walletHeader}>
+              <View style={styles.walletInfo}>
+                <Text style={styles.walletAddress}>
+                  {item.address.slice(0, 6)}...{item.address.slice(-4)}
+                </Text>
+                <Text style={styles.walletBalance}>{item.balance} ETH</Text>
+              </View>
+              <View style={styles.walletActions}>
+                <IconButton
+                  icon="refresh"
+                  size={20}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleRefreshWallet(item.address);
+                  }}
+                />
+                <IconButton
+                  icon="delete"
+                  size={20}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleRemoveWallet(item.address);
+                  }}
+                />
+              </View>
             </View>
             
-            <View style={styles.balanceItem}>
-              <Text variant="bodyMedium">Total Value</Text>
-              <Text variant="titleMedium" style={styles.totalValue}>
-                ${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            <View style={styles.walletStats}>
+              <Text style={styles.tokenCount}>
+                {item.tokens?.length || 0} tokens
+              </Text>
+              <Text style={styles.totalValue}>
+                ~${totalTokenValue.toFixed(2)}
               </Text>
             </View>
-          </View>
-        </Card.Content>
-      </Card>
+            
+            <View style={styles.tapHint}>
+              <Text style={styles.tapHintText}>Tap to view tokens →</Text>
+            </View>
+          </Card.Content>
+        </Card>
+      </TouchableOpacity>
     );
   };
 
@@ -389,6 +394,38 @@ const styles = StyleSheet.create({
   totalValue: {
     color: '#4CAF50',
     fontWeight: 'bold',
+  },
+  walletInfo: {
+    flex: 1,
+  },
+  walletAddress: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  walletBalance: {
+    fontSize: 14,
+    color: '#666',
+  },
+  walletStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  tokenCount: {
+    fontSize: 14,
+    color: '#666',
+  },
+  tapHint: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  tapHintText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
   },
   addWalletCard: {
     margin: 16,
