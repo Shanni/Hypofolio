@@ -1,75 +1,418 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { Text, Card, Button, TextInput, IconButton, ActivityIndicator, FAB } from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
+// Using localStorage for web or AsyncStorage for React Native
+import AsyncStorage from '@react-native-async-storage/async-storage';
+// Import API configuration
+import { getApiUrl, API_CONFIG } from '../../src/config/api';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+// Define wallet and token interfaces
+interface Token {
+  symbol: string;
+  balance: string;
+  decimals: number;
+}
 
-export default function HomeScreen() {
+interface Wallet {
+  address: string;
+  balance: string;
+  tokens: Token[];
+}
+
+export default function WalletsScreen() {
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [address, setAddress] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showAddWallet, setShowAddWallet] = useState(false);
+  
+  // Load wallets from localStorage on component mount
+  useEffect(() => {
+    loadWallets();
+  }, []);
+  
+  const loadWallets = async () => {
+    try {
+      const storedWallets = await AsyncStorage.getItem('wallets');
+      if (storedWallets) {
+        setWallets(JSON.parse(storedWallets));
+      }
+    } catch (error) {
+      console.error('Error loading wallets:', error);
+    }
+  };
+  
+  const saveWallets = async (updatedWallets: Wallet[]) => {
+    try {
+      await AsyncStorage.setItem('wallets', JSON.stringify(updatedWallets));
+      setWallets(updatedWallets);
+    } catch (error) {
+      console.error('Error saving wallets:', error);
+    }
+  };
+
+  const handleAddWallet = async () => {
+    if (!address.trim()) {
+      setError('Please enter a wallet address');
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
+    
+    try {
+      // Check if wallet already exists
+      const walletExists = wallets.some(wallet => 
+        wallet.address.toLowerCase() === address.toLowerCase()
+      );
+      
+      if (walletExists) {
+        setError('Wallet already exists');
+        return;
+      }
+      
+      // Fetch wallet data from API (mock for now)
+      console.log('Fetching wallet data for address:', address);
+      let walletData;
+      try {
+        const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.WALLET + `/${address}`);
+        console.log('Calling API:', apiUrl);
+        const response = await fetch(apiUrl);
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+          console.error('API error response:', response.statusText);
+          throw new Error(`Failed to fetch wallet data: ${response.statusText}`);
+        }
+        
+        walletData = await response.json();
+        console.log('Wallet data received:', walletData);
+      } catch (fetchError: any) {
+        console.error('Fetch error:', fetchError);
+        throw new Error(`Network error: ${fetchError.message}`);
+      }
+      
+      const newWallet = {
+        address: address,
+        balance: walletData?.balance || '0',
+        tokens: walletData?.tokens || []
+      };
+      
+      const updatedWallets = [...wallets, newWallet];
+      await saveWallets(updatedWallets);
+      
+      setAddress('');
+      setShowAddWallet(false);
+    } catch (error) {
+      setError(error.message || 'Failed to add wallet');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveWallet = (address: string) => {
+    Alert.alert(
+      'Remove Wallet',
+      'Are you sure you want to remove this wallet?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Remove', 
+          onPress: () => {
+            const updatedWallets = wallets.filter(wallet => wallet.address !== address);
+            saveWallets(updatedWallets);
+          },
+          style: 'destructive'
+        }
+      ]
+    );
+  };
+
+  const handleRefreshWallet = async (address: string) => {
+    try {
+      // Fetch updated wallet data from API
+      console.log('Refreshing wallet data for address:', address);
+      let walletData;
+      try {
+        const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.WALLET + `/${address}`);
+        console.log('Calling refresh API:', apiUrl);
+        const response = await fetch(apiUrl);
+        console.log('Refresh response status:', response.status);
+        
+        if (!response.ok) {
+          console.error('API refresh error:', response.statusText);
+          throw new Error(`Failed to fetch wallet data: ${response.statusText}`);
+        }
+        
+        walletData = await response.json();
+        console.log('Refreshed wallet data:', walletData);
+      } catch (fetchError: any) {
+        console.error('Refresh fetch error:', fetchError);
+        throw new Error(`Network error during refresh: ${fetchError.message}`);
+      }
+      
+      // Update wallet in state
+      const updatedWallets = wallets.map(wallet => 
+        wallet.address === address ? 
+        { ...wallet, balance: walletData?.balance || wallet.balance } : 
+        wallet
+      );
+      
+      await saveWallets(updatedWallets);
+    } catch (error) {
+      console.error('Error refreshing wallet:', error);
+    }
+  };
+  
+  const updateTokens = async (address: string) => {
+    console.log('Updating tokens for wallet:', address);
+    try {
+      // Fetch tokens for the wallet
+      console.log('Fetching tokens for wallet:', address);
+      let data;
+      try {
+        const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.WALLET_TOKENS, { address });
+        console.log('Calling tokens API:', apiUrl);
+        const response = await fetch(apiUrl);
+        console.log('Tokens response status:', response.status);
+        
+        if (!response.ok) {
+          console.error('API tokens error:', response.statusText);
+          throw new Error(`Failed to fetch token data: ${response.statusText}`);
+        }
+        
+        data = await response.json();
+        console.log('Token data received:', data);
+      } catch (fetchError: any) {
+        console.error('Tokens fetch error:', fetchError);
+        throw new Error(`Network error fetching tokens: ${fetchError.message}`);
+      }
+      
+      // Update wallet tokens in state
+      const updatedWallets = wallets.map(wallet => 
+        wallet.address === address ? 
+        { ...wallet, tokens: data?.tokens || [] } : 
+        wallet
+      );
+      
+      await saveWallets(updatedWallets);
+    } catch (error) {
+      console.error('Error updating tokens:', error);
+    }
+  };
+
+  const renderWalletItem = ({ item }: { item: Wallet }) => {
+    const totalTokenValue = item.tokens ? item.tokens.reduce((sum: number, token: Token) => {
+      // Mock token prices for demonstration
+      const tokenPrice = token.symbol === 'USDT' || token.symbol === 'USDC' ? 1 : Math.random() * 10;
+      return sum + (parseFloat(token.balance) * tokenPrice);
+    }, 0) : 0;
+    
+    // Mock ETH price at $3000
+    const ethValue = parseFloat(item.balance) * 3000;
+    const totalValue = ethValue + totalTokenValue;
+
+    return (
+      <Card style={styles.walletCard}>
+        <Card.Content>
+          <View style={styles.walletHeader}>
+            <Text variant="titleMedium" numberOfLines={1} style={styles.addressText}>
+              {item.address}
+            </Text>
+            <View style={styles.walletActions}>
+              <IconButton 
+                icon="refresh" 
+                size={20} 
+                onPress={() => handleRefreshWallet(item.address)} 
+              />
+              <IconButton 
+                icon="delete-outline" 
+                size={20} 
+                onPress={() => handleRemoveWallet(item.address)} 
+              />
+            </View>
+          </View>
+          
+          <View style={styles.balanceContainer}>
+            <View style={styles.balanceItem}>
+              <Text variant="bodyMedium">ETH Balance</Text>
+              <Text variant="titleMedium">{parseFloat(item.balance).toFixed(4)} ETH</Text>
+              <Text variant="bodySmall">${ethValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+            </View>
+            
+            <View style={styles.balanceItem}>
+              <Text variant="bodyMedium">Tokens</Text>
+              <Text variant="titleMedium">{item.tokens ? item.tokens.length : 0}</Text>
+              <Text variant="bodySmall">${totalTokenValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+            </View>
+            
+            <View style={styles.balanceItem}>
+              <Text variant="bodyMedium">Total Value</Text>
+              <Text variant="titleMedium" style={styles.totalValue}>
+                ${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </Text>
+            </View>
+          </View>
+        </Card.Content>
+      </Card>
+    );
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text variant="headlineMedium" style={styles.title}>My Wallets</Text>
+      </View>
+      
+      {showAddWallet ? (
+        <Card style={styles.addWalletCard}>
+          <Card.Content>
+            <TextInput
+              label="Wallet Address"
+              value={address}
+              onChangeText={(text) => {
+                setAddress(text);
+                setError('');
+              }}
+              style={styles.input}
+              error={!!error}
+            />
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            
+            <View style={styles.buttonContainer}>
+              <Button 
+                mode="outlined" 
+                onPress={() => setShowAddWallet(false)}
+                style={styles.cancelButton}
+              >
+                Cancel
+              </Button>
+              <Button 
+                mode="contained" 
+                onPress={handleAddWallet} 
+                loading={loading}
+                disabled={loading}
+              >
+                Add Wallet
+              </Button>
+            </View>
+          </Card.Content>
+        </Card>
+      ) : null}
+      
+      {wallets.length === 0 && !showAddWallet ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No wallets added yet</Text>
+          <Button 
+            mode="contained" 
+            onPress={() => setShowAddWallet(true)}
+            style={styles.addButton}
+          >
+            Add Your First Wallet
+          </Button>
+        </View>
+      ) : (
+        <FlatList
+          data={wallets}
+          renderItem={renderWalletItem}
+          keyExtractor={(item) => item.address}
+          contentContainerStyle={styles.listContent}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      )}
+      
+      {!showAddWallet && wallets.length > 0 && (
+        <FAB
+          icon="plus"
+          style={styles.fab}
+          onPress={() => setShowAddWallet(true)}
+        />
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
   },
-  stepContainer: {
-    gap: 8,
+  header: {
+    padding: 16,
+    backgroundColor: '#fff',
+  },
+  title: {
+    fontWeight: 'bold',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  emptyText: {
+    marginBottom: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  addButton: {
+    marginTop: 8,
+  },
+  listContent: {
+    padding: 16,
+  },
+  walletCard: {
+    marginBottom: 16,
+    borderRadius: 8,
+  },
+  walletHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  addressText: {
+    flex: 1,
+    marginRight: 8,
+  },
+  walletActions: {
+    flexDirection: 'row',
+  },
+  balanceContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  balanceItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  totalValue: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+  addWalletCard: {
+    margin: 16,
+    borderRadius: 8,
+  },
+  input: {
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  errorText: {
+    color: 'red',
+    marginBottom: 8,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 16,
+  },
+  cancelButton: {
+    marginRight: 8,
+  },
+  fab: {
     position: 'absolute',
+    margin: 16,
+    right: 0,
+    bottom: 0,
   },
 });

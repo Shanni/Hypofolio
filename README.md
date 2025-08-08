@@ -1,8 +1,42 @@
-# Welcome to your Expo app 👋
+# Wallet Tracker App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A mobile application for tracking Ethereum wallet addresses and their balances. This app uses a client-server architecture where all blockchain interactions are handled by a backend server.
 
-## Get started
+## Architecture
+
+- **Mobile App (Client)**: React Native app that provides the user interface for adding and viewing wallet addresses
+- **Backend Server**: Node.js/Express server that handles all blockchain interactions
+
+## Setup
+
+### Backend Server
+
+1. Navigate to the server directory
+
+   ```bash
+   cd ../wallet-tracker-server
+   ```
+
+2. Install dependencies
+
+   ```bash
+   npm install
+   ```
+
+3. Configure environment variables in `.env` file
+
+   ```
+   PORT=5000
+   INFURA_URL=https://mainnet.infura.io/v3/YOUR_INFURA_KEY
+   ```
+
+4. Start the server
+
+   ```bash
+   npm start
+   ```
+
+### Mobile App
 
 1. Install dependencies
 
