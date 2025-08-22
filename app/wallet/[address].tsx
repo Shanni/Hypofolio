@@ -12,13 +12,28 @@ interface Token {
   balance: string;
   decimals: number;
   price?: number;
-  change24h?: number;
+  value?: number;
+  marketData?: {
+    usd: number;
+    usd_market_cap: number;
+    usd_24h_vol: number;
+    usd_24h_change: number;
+  };
 }
 
 interface Wallet {
   address: string;
   balance: string;
   tokens: Token[];
+  totalValue?: number;
+}
+
+interface PortfolioResponse {
+  address: string;
+  balance: string;
+  tokens: Token[];
+  totalValue: number;
+  timestamp: string;
 }
 
 interface TokenWithValue extends Token {
@@ -48,6 +63,37 @@ export default function WalletDetailsScreen() {
 
   const loadWalletDetails = async () => {
     try {
+      // First try to get real portfolio data from backend
+      if (address) {
+        try {
+          const response = await fetch(`http://localhost:4001/api/wallet/${address}/portfolio`);
+          const portfolioData: PortfolioResponse = await response.json();
+          
+          if (portfolioData.address) {
+            setWallet({
+              address: portfolioData.address,
+              balance: portfolioData.balance,
+              tokens: portfolioData.tokens,
+              totalValue: portfolioData.totalValue
+            });
+            setTotalValue(portfolioData.totalValue);
+            
+            // Convert to TokenWithValue format
+            const enrichedTokens: TokenWithValue[] = portfolioData.tokens.map(token => ({
+              ...token,
+              usdValue: token.value || 0
+            }));
+            
+            setTokensWithValue(enrichedTokens);
+            setLoading(false);
+            return;
+          }
+        } catch (apiError) {
+          console.log('API call failed, falling back to stored data:', apiError);
+        }
+      }
+      
+      // Fallback to stored wallet data
       const storedWallets = await AsyncStorage.getItem('wallets');
       if (storedWallets) {
         const wallets: Wallet[] = JSON.parse(storedWallets);
@@ -66,6 +112,11 @@ export default function WalletDetailsScreen() {
   const calculateTokenValues = () => {
     if (!wallet) return;
 
+    // If we already have portfolio data from API, skip calculation
+    if (wallet.totalValue !== undefined) {
+      return;
+    }
+
     let portfolioValue = 0;
     const allTokens: TokenWithValue[] = [];
     
@@ -80,7 +131,12 @@ export default function WalletDetailsScreen() {
         balance: wallet.balance,
         decimals: 18,
         price: ethPrice,
-        change24h: getMockChange24h('ETH'),
+        marketData: {
+          usd: ethPrice,
+          usd_market_cap: 0,
+          usd_24h_vol: 0,
+          usd_24h_change: getMockChange24h('ETH')
+        },
         usdValue: ethValue
       });
       
@@ -90,14 +146,13 @@ export default function WalletDetailsScreen() {
     // Add other tokens
     wallet.tokens.forEach(token => {
       const balance = parseFloat(token.balance);
-      const price = getMockPrice(token.symbol);
-      const usdValue = balance * price;
+      const price = token.price || getMockPrice(token.symbol);
+      const usdValue = token.value || (balance * price);
       portfolioValue += usdValue;
 
       allTokens.push({
         ...token,
         price,
-        change24h: getMockChange24h(token.symbol),
         usdValue
       });
     });
@@ -165,8 +220,10 @@ export default function WalletDetailsScreen() {
   };
 
   const renderTokenItem = ({ item }: { item: TokenWithValue }) => {
-    const changeColor = (item.change24h || 0) >= 0 ? '#00C853' : '#FF1744';
-    const changeIcon = (item.change24h || 0) >= 0 ? '↗' : '↘';
+    const change24h = item.marketData?.usd_24h_change || 0;
+    const changeColor = change24h >= 0 ? '#00C853' : '#FF1744';
+    const changeIcon = change24h >= 0 ? '↗' : '↘';
+    const price = item.price || item.marketData?.usd || 0;
     
     return (
       <Card style={styles.tokenCard}>
@@ -184,12 +241,19 @@ export default function WalletDetailsScreen() {
             <View style={styles.tokenValues}>
               <Text style={styles.tokenValue}>${item.usdValue.toFixed(2)}</Text>
               <Text style={[styles.priceChange, { color: changeColor }]}>
-                {(item.change24h || 0) >= 0 ? '+' : ''}{(item.change24h || 0).toFixed(2)}% {changeIcon}
+                {change24h >= 0 ? '+' : ''}{change24h.toFixed(2)}% {changeIcon}
               </Text>
             </View>
           </View>
           <View style={styles.tokenPrice}>
-            <Text style={styles.priceLabel}>Price: ${(item.price || 0).toFixed(2)}</Text>
+            <Text style={styles.priceLabel}>Price: ${price < 1 ? price.toFixed(6) : price.toFixed(2)}</Text>
+            {item.marketData && (
+              <Text style={styles.marketCapLabel}>
+                Market Cap: ${item.marketData.usd_market_cap >= 1e9 ? 
+                  `${(item.marketData.usd_market_cap / 1e9).toFixed(1)}B` : 
+                  `${(item.marketData.usd_market_cap / 1e6).toFixed(1)}M`}
+              </Text>
+            )}
           </View>
         </Card.Content>
       </Card>
@@ -391,6 +455,11 @@ const styles = StyleSheet.create({
   priceLabel: {
     fontSize: 12,
     color: '#666',
+  },
+  marketCapLabel: {
+    fontSize: 11,
+    color: '#8B7355', // Muted brown
+    marginTop: 2,
   },
   loadingContainer: {
     flex: 1,

@@ -5,13 +5,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Define interfaces for market data
 interface MarketToken {
+  id: string;
   symbol: string;
   name: string;
-  price: number;
-  change24h: number;
-  marketCap: number;
-  volume24h: number;
-  rank: number;
+  current_price: number;
+  price_change_percentage_24h: number;
+  market_cap: number;
+  total_volume: number;
+  market_cap_rank: number;
+  image?: string;
+}
+
+interface ApiResponse {
+  success: boolean;
+  data: MarketToken[];
+  timestamp: string;
 }
 
 export default function TokensScreen() {
@@ -31,103 +39,21 @@ export default function TokensScreen() {
 
   const loadMarketData = async () => {
     try {
-      // Generate mock market data for popular cryptocurrencies
-      const marketTokens: MarketToken[] = [
-        {
-          symbol: 'BTC',
-          name: 'Bitcoin',
-          price: 43298.89,
-          change24h: -3.37,
-          marketCap: 850000000000,
-          volume24h: 25000000000,
-          rank: 1
-        },
-        {
-          symbol: 'ETH',
-          name: 'Ethereum',
-          price: 2902.26,
-          change24h: -1.99,
-          marketCap: 350000000000,
-          volume24h: 15000000000,
-          rank: 2
-        },
-        {
-          symbol: 'USDT',
-          name: 'Tether',
-          price: 1.00,
-          change24h: 0.01,
-          marketCap: 95000000000,
-          volume24h: 45000000000,
-          rank: 3
-        },
-        {
-          symbol: 'BNB',
-          name: 'BNB',
-          price: 308.45,
-          change24h: 2.15,
-          marketCap: 47000000000,
-          volume24h: 1200000000,
-          rank: 4
-        },
-        {
-          symbol: 'XRP',
-          name: 'XRP',
-          price: 0.202252,
-          change24h: -1.25,
-          marketCap: 11000000000,
-          volume24h: 800000000,
-          rank: 5
-        },
-        {
-          symbol: 'USDC',
-          name: 'USD Coin',
-          price: 1.00,
-          change24h: -0.02,
-          marketCap: 25000000000,
-          volume24h: 5000000000,
-          rank: 6
-        },
-        {
-          symbol: 'LINK',
-          name: 'Chainlink',
-          price: 14.52,
-          change24h: 2.15,
-          marketCap: 8500000000,
-          volume24h: 450000000,
-          rank: 7
-        },
-        {
-          symbol: 'UNI',
-          name: 'Uniswap',
-          price: 8.76,
-          change24h: 4.32,
-          marketCap: 5200000000,
-          volume24h: 180000000,
-          rank: 8
-        },
-        {
-          symbol: 'BCH',
-          name: 'Bitcoin Cash',
-          price: 396.76,
-          change24h: -3.90,
-          marketCap: 7800000000,
-          volume24h: 320000000,
-          rank: 9
-        },
-        {
-          symbol: 'XMR',
-          name: 'Monero',
-          price: 94.12,
-          change24h: 2.97,
-          marketCap: 1700000000,
-          volume24h: 85000000,
-          rank: 10
-        }
-      ];
+      // Fetch real market data from backend
+      const response = await fetch('http://localhost:4001/api/market/top?limit=50');
+      const result: ApiResponse = await response.json();
       
-      setAllTokens(marketTokens);
+      if (result.success && result.data) {
+        setAllTokens(result.data);
+      } else {
+        console.error('Failed to fetch market data:', result);
+        // Fallback to empty array or show error message
+        setAllTokens([]);
+      }
     } catch (error) {
       console.error('Error loading market data:', error);
+      // Fallback to empty array in case of network error
+      setAllTokens([]);
     }
   };
 
@@ -146,9 +72,9 @@ export default function TokensScreen() {
 
     // Apply gain/loss filter
     if (filter === 'Gainers') {
-      filtered = filtered.filter(token => token.change24h > 0);
+      filtered = filtered.filter(token => token.price_change_percentage_24h > 0);
     } else if (filter === 'Losers') {
-      filtered = filtered.filter(token => token.change24h < 0);
+      filtered = filtered.filter(token => token.price_change_percentage_24h < 0);
     }
 
     setFilteredTokens(filtered);
@@ -183,29 +109,31 @@ export default function TokensScreen() {
   };
 
   const renderTokenItem = ({ item }: { item: MarketToken }) => {
-    const changeColor = item.change24h >= 0 ? '#00C853' : '#FF1744';
-    const changeIcon = item.change24h >= 0 ? '↗' : '↘';
+    const changeColor = item.price_change_percentage_24h >= 0 ? '#00C853' : '#FF1744';
+    const changeIcon = item.price_change_percentage_24h >= 0 ? '↗' : '↘';
     
     return (
       <View style={styles.tokenRow}>
         <View style={styles.tokenInfo}>
-          <Text style={styles.tokenIcon}>{getTokenIcon(item.symbol)}</Text>
+          <Text style={styles.tokenIcon}>{getTokenIcon(item.symbol.toUpperCase())}</Text>
           <View style={styles.tokenDetails}>
-            <Text style={styles.tokenSymbol}>{item.symbol}</Text>
+            <Text style={styles.tokenSymbol}>{item.symbol.toUpperCase()}</Text>
             <Text style={styles.tokenName}>{item.name}</Text>
           </View>
         </View>
         
         <View style={styles.marketColumn}>
-          <Text style={styles.tokenPrice}>${item.price.toFixed(2)}</Text>
-          <Text style={styles.marketCap}>{formatMarketCap(item.marketCap)}</Text>
+          <Text style={styles.tokenPrice}>
+            ${item.current_price < 1 ? item.current_price.toFixed(6) : item.current_price.toFixed(2)}
+          </Text>
+          <Text style={styles.marketCap}>{formatMarketCap(item.market_cap)}</Text>
         </View>
         
         <View style={styles.priceColumn}>
           <Text style={[styles.priceChange, { color: changeColor }]}>
-            {item.change24h >= 0 ? '+' : ''}{item.change24h.toFixed(2)}% {changeIcon}
+            {item.price_change_percentage_24h >= 0 ? '+' : ''}{item.price_change_percentage_24h?.toFixed(2) || '0.00'}% {changeIcon}
           </Text>
-          <Text style={styles.rankText}>#{item.rank}</Text>
+          <Text style={styles.rankText}>#{item.market_cap_rank}</Text>
         </View>
         
         <TouchableOpacity style={styles.alertButton}>
@@ -258,7 +186,7 @@ export default function TokensScreen() {
       <FlatList
         data={filteredTokens}
         renderItem={renderTokenItem}
-        keyExtractor={(item) => item.symbol}
+        keyExtractor={(item) => item.id}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }

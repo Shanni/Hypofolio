@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, View, FlatList, TouchableOpacity, Dimensions } from 'react-native';
 import { Text, Card, Button, TextInput, IconButton, ActivityIndicator, FAB } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -258,59 +258,72 @@ export default function WalletsScreen() {
     const totalValue = calculateWalletTotalValue(item);
 
     return (
-      <TouchableOpacity onPress={() => handleWalletPress(item)}>
-        <Card style={styles.walletCard}>
-          <Card.Content>
-            {/* Wallet Address Header */}
-            <View style={styles.walletAddressHeader}>
-              <View style={styles.walletIconContainer}>
-                <Text style={styles.walletIcon}>💳</Text>
-              </View>
-              <View style={styles.addressContainer}>
-                <Text style={styles.walletLabel}>Wallet Address</Text>
-                <Text style={styles.fullWalletAddress}>{item.address}</Text>
-              </View>
-              <View style={styles.walletActions}>
-                <IconButton
-                  icon="refresh"
-                  size={20}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleRefreshWallet(item.address);
-                  }}
-                />
-                <IconButton
-                  icon="delete"
-                  size={20}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleRemoveWallet(item.address);
-                  }}
-                />
-              </View>
+      <TouchableOpacity onPress={() => handleWalletPress(item)} style={styles.walletCardContainer}>
+        <View style={styles.walletCard}>
+          {/* Simple Header with Icon and Actions */}
+          <View style={styles.walletHeader}>
+            <View style={styles.walletIconSimple}>
+              <Text style={styles.walletIconText}>💳</Text>
             </View>
-            
-            {/* Total Portfolio Value */}
-            <View style={styles.totalValueSection}>
-              <Text style={styles.totalValueLabel}>Total Portfolio Value</Text>
-              <Text style={styles.totalValueAmount}>
-                ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </Text>
+            <View style={styles.walletActions}>
+              <IconButton
+                icon="refresh"
+                size={18}
+                iconColor="#8B7355"
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleRefreshWallet(item.address);
+                }}
+              />
+              <IconButton
+                icon="delete"
+                size={18}
+                iconColor="#8B7355"
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleRemoveWallet(item.address);
+                }}
+              />
             </View>
-            
-            <View style={styles.tapHint}>
-              <Text style={styles.tapHintText}>Tap to view detailed holdings →</Text>
-            </View>
-          </Card.Content>
-        </Card>
+          </View>
+          
+          {/* Address Display with Title */}
+          <View style={styles.addressSection}>
+            <Text style={styles.sectionTitle}>Wallet Address</Text>
+            <Text style={styles.addressText}>{item.address}</Text>
+          </View>
+          
+          {/* Value Display with Title */}
+          <View style={styles.valueSection}>
+            <Text style={styles.sectionTitle}>Portfolio Value</Text>
+            <Text style={styles.valueAmount}>
+              ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Text>
+          </View>
+        </View>
       </TouchableOpacity>
+    );
+  };
+
+  const renderEmptyWalletList = () => {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No wallets added yet</Text>
+        <Button 
+          mode="contained" 
+          onPress={() => setShowAddWallet(true)}
+          style={styles.addButton}
+        >
+          Add Your First Wallet
+        </Button>
+      </View>
     );
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text variant="headlineMedium" style={styles.title}>My Pocket</Text>
+        <Text variant="headlineMedium" style={styles.title}>My Hypefolio</Text>
       </View>
       
       {/* Total Portfolio Value */}
@@ -376,7 +389,12 @@ export default function WalletsScreen() {
           data={wallets}
           renderItem={renderWalletItem}
           keyExtractor={(item) => item.address}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: 0 }}
+          ListEmptyComponent={renderEmptyWalletList}
+          showsVerticalScrollIndicator={false}
+          snapToAlignment="start"
+          snapToInterval={Dimensions.get('window').width}
+          decelerationRate="fast"
         />
       )}
       
@@ -391,17 +409,21 @@ export default function WalletsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<any>({
   container: {
     flex: 1,
     backgroundColor: '#F5F0E8', // Light beige from swatch
   },
   header: {
     padding: 16,
-    backgroundColor: '#FFFFFF', // Pure white for contrast
+    paddingBottom: 8,
+    backgroundColor: '#F5F0E8', // Light beige from swatch
   },
   title: {
     fontWeight: 'bold',
+    fontSize: 28,
+    color: '#3D2914', // Dark brown text
+    letterSpacing: 0.5,
   },
   emptyContainer: {
     flex: 1,
@@ -420,74 +442,79 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
   },
-  walletCard: {
+  walletCardContainer: {
+    marginHorizontal: 16,
     marginBottom: 16,
-    borderRadius: 12,
+    width: Dimensions.get('window').width - 32,
+    alignSelf: 'center',
+  },
+  walletCard: {
     backgroundColor: '#FFFFFF', // Pure white card background
-    elevation: 3,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 2,
     shadowColor: '#A0522D', // Rich brown shadow
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.1,
     shadowRadius: 6,
     borderWidth: 1,
-    borderColor: '#E8DDD0', // Light beige border
+    borderColor: '#F0EBE3', // Very light beige border
   },
   walletHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  addressText: {
-    flex: 1,
-    marginRight: 8,
+  walletIconSimple: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5F0E8', // Light beige background
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E8DDD0', // Light beige border
+  },
+  walletIconText: {
+    fontSize: 20,
   },
   walletActions: {
     flexDirection: 'row',
-  },
-  balanceContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  balanceItem: {
-    flex: 1,
     alignItems: 'center',
   },
-  totalValue: {
-    color: '#4CAF50',
-    fontWeight: 'bold',
+  addressSection: {
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F0E8', // Light beige divider
   },
-  walletInfo: {
-    flex: 1,
-  },
-  walletAddress: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+  sectionTitle: {
+    fontSize: 12,
+    color: '#8B7355', // Muted brown
+    fontWeight: '500',
     marginBottom: 4,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
-  walletBalance: {
-    fontSize: 14,
-    color: '#666',
-  },
-  walletStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  tokenCount: {
+  addressText: {
     fontSize: 14,
     color: '#8B7355', // Muted brown
+    fontFamily: 'monospace',
+    lineHeight: 20,
   },
-  tapHint: {
-    marginTop: 8,
-    alignItems: 'center',
+  valueSection: {
+    marginTop: 4,
+    alignItems: 'flex-end',
+    width: '100%',
   },
-  tapHintText: {
-    fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
+  valueAmount: {
+    fontSize: 24,
+    color: '#A0522D', // Rich brown accent
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+    textAlign: 'right',
+    alignSelf: 'flex-end',
   },
   addWalletCard: {
     margin: 16,
@@ -573,14 +600,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF', // Pure white card
     margin: 16,
     marginTop: 8,
-    padding: 20,
-    borderRadius: 16,
+    padding: 24,
+    borderRadius: 20,
     alignItems: 'center',
     elevation: 4,
     shadowColor: '#A0522D', // Rich brown shadow
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 8,
+    shadowRadius: 10,
     borderWidth: 1,
     borderColor: '#E8DDD0', // Light beige border
   },
@@ -588,17 +615,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#8B7355', // Muted brown
     fontWeight: '500',
-    marginBottom: 8,
+    marginBottom: 10,
+    letterSpacing: 0.5,
   },
   totalPortfolioValue: {
-    fontSize: 32,
+    fontSize: 36,
     color: '#A0522D', // Rich brown accent
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: 0.5,
   },
   totalPortfolioSubtext: {
     fontSize: 14,
     color: '#8B7355', // Muted brown
     fontWeight: '400',
+    letterSpacing: 0.3,
   },
 });
