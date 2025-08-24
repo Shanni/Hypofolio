@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, FlatList, RefreshControl, TouchableOpacity, ScrollView } from 'react-native';
 import { Text, Card, Searchbar, Chip, IconButton } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { getApiUrl, API_CONFIG } from '../../src/config/api';
 
 // Define interfaces for market data
 interface MarketToken {
@@ -49,8 +51,8 @@ export default function MarketScreen() {
       
       // Fetch top cryptocurrencies and global market data in parallel
       const [topResponse, globalResponse] = await Promise.all([
-        fetch('http://localhost:4001/api/market/top?limit=100'),
-        fetch('http://localhost:4001/api/market/global')
+        fetch(getApiUrl(API_CONFIG.ENDPOINTS.MARKET_TOP) + '?limit=100'),
+        fetch(getApiUrl(API_CONFIG.ENDPOINTS.MARKET_GLOBAL))
       ]);
 
       const topResult: ApiResponse = await topResponse.json();

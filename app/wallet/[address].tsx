@@ -2,327 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { Text, Card, IconButton, ActivityIndicator } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiUrl, API_CONFIG } from '../../src/config/api';
 
-// Define interfaces
-interface Token {
-  symbol: string;
-  balance: string;
-  decimals: number;
-  price?: number;
-  value?: number;
-  marketData?: {
-    usd: number;
-    usd_market_cap: number;
-    usd_24h_vol: number;
-    usd_24h_change: number;
-  };
-}
-
-interface Wallet {
-  address: string;
-  balance: string;
-  tokens: Token[];
-  totalValue?: number;
-}
-
-interface PortfolioResponse {
-  address: string;
-  balance: string;
-  tokens: Token[];
-  totalValue: number;
-  timestamp: string;
-}
-
-interface TokenWithValue extends Token {
-  usdValue: number;
-}
-
-export default function WalletDetailsScreen() {
-  const { address } = useLocalSearchParams<{ address: string }>();
-  const router = useRouter();
-  const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [tokensWithValue, setTokensWithValue] = useState<TokenWithValue[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [totalValue, setTotalValue] = useState(0);
-
-  useEffect(() => {
-    if (address) {
-      loadWalletDetails();
-    }
-  }, [address]);
-
-  useEffect(() => {
-    if (wallet) {
-      calculateTokenValues();
-    }
-  }, [wallet]);
-
-  const loadWalletDetails = async () => {
-    try {
-      // First try to get real portfolio data from backend
-      if (address) {
-        try {
-          const response = await fetch(`http://localhost:4001/api/wallet/${address}/portfolio`);
-          const portfolioData: PortfolioResponse = await response.json();
-          
-          if (portfolioData.address) {
-            setWallet({
-              address: portfolioData.address,
-              balance: portfolioData.balance,
-              tokens: portfolioData.tokens,
-              totalValue: portfolioData.totalValue
-            });
-            setTotalValue(portfolioData.totalValue);
-            
-            // Convert to TokenWithValue format
-            const enrichedTokens: TokenWithValue[] = portfolioData.tokens.map(token => ({
-              ...token,
-              usdValue: token.value || 0
-            }));
-            
-            setTokensWithValue(enrichedTokens);
-            setLoading(false);
-            return;
-          }
-        } catch (apiError) {
-          console.log('API call failed, falling back to stored data:', apiError);
-        }
-      }
-      
-      // Fallback to stored wallet data
-      const storedWallets = await AsyncStorage.getItem('wallets');
-      if (storedWallets) {
-        const wallets: Wallet[] = JSON.parse(storedWallets);
-        const foundWallet = wallets.find(w => w.address === address);
-        if (foundWallet) {
-          setWallet(foundWallet);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading wallet details:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const calculateTokenValues = () => {
-    if (!wallet) return;
-
-    // If we already have portfolio data from API, skip calculation
-    if (wallet.totalValue !== undefined) {
-      return;
-    }
-
-    let portfolioValue = 0;
-    const allTokens: TokenWithValue[] = [];
-    
-    // Add ETH as a token if there's a balance
-    if (wallet.balance && parseFloat(wallet.balance) > 0) {
-      const ethBalance = parseFloat(wallet.balance);
-      const ethPrice = getMockPrice('ETH');
-      const ethValue = ethBalance * ethPrice;
-      
-      allTokens.push({
-        symbol: 'ETH',
-        balance: wallet.balance,
-        decimals: 18,
-        price: ethPrice,
-        marketData: {
-          usd: ethPrice,
-          usd_market_cap: 0,
-          usd_24h_vol: 0,
-          usd_24h_change: getMockChange24h('ETH')
-        },
-        usdValue: ethValue
-      });
-      
-      portfolioValue += ethValue;
-    }
-    
-    // Add other tokens
-    wallet.tokens.forEach(token => {
-      const balance = parseFloat(token.balance);
-      const price = token.price || getMockPrice(token.symbol);
-      const usdValue = token.value || (balance * price);
-      portfolioValue += usdValue;
-
-      allTokens.push({
-        ...token,
-        price,
-        usdValue
-      });
-    });
-
-    // Sort by USD value descending
-    allTokens.sort((a, b) => b.usdValue - a.usdValue);
-    
-    setTokensWithValue(allTokens);
-    setTotalValue(portfolioValue);
-  };
-
-  const getMockPrice = (symbol: string): number => {
-    const prices: { [key: string]: number } = {
-      'ETH': 2902.26,
-      'BTC': 43298.89,
-      'USDT': 1.00,
-      'USDC': 1.00,
-      'LINK': 14.52,
-      'UNI': 8.76,
-      'XRP': 0.202252,
-      'BCH': 396.76,
-      'XMR': 94.12
-    };
-    return prices[symbol] || Math.random() * 100;
-  };
-
-  const getMockChange24h = (symbol: string): number => {
-    const changes: { [key: string]: number } = {
-      'ETH': -1.99,
-      'BTC': -3.37,
-      'USDT': 0.01,
-      'USDC': -0.02,
-      'LINK': 2.15,
-      'UNI': 4.32,
-      'XRP': -1.25,
-      'BCH': -3.90,
-      'XMR': 2.97
-    };
-    return changes[symbol] || (Math.random() - 0.5) * 10;
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadWalletDetails();
-    setRefreshing(false);
-  };
-
-  const getTokenIcon = (symbol: string) => {
-    const icons: { [key: string]: string } = {
-      'ETH': '⟠',
-      'BTC': '₿',
-      'USDT': '₮',
-      'USDC': 'Ⓤ',
-      'LINK': '🔗',
-      'UNI': '🦄',
-      'XRP': '◉',
-      'BCH': '₿',
-      'XMR': 'ɱ'
-    };
-    return icons[symbol] || '●';
-  };
-
-  const formatAddress = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
-
-  const renderTokenItem = ({ item }: { item: TokenWithValue }) => {
-    const change24h = item.marketData?.usd_24h_change || 0;
-    const changeColor = change24h >= 0 ? '#00C853' : '#FF1744';
-    const changeIcon = change24h >= 0 ? '↗' : '↘';
-    const price = item.price || item.marketData?.usd || 0;
-    
-    return (
-      <Card style={styles.tokenCard}>
-        <Card.Content style={styles.tokenContent}>
-          <View style={styles.tokenHeader}>
-            <View style={styles.tokenInfo}>
-              <Text style={styles.tokenIcon}>{getTokenIcon(item.symbol)}</Text>
-              <View>
-                <Text style={styles.tokenSymbol}>{item.symbol}</Text>
-                <Text style={styles.tokenBalance}>
-                  {parseFloat(item.balance).toFixed(4)} {item.symbol}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.tokenValues}>
-              <Text style={styles.tokenValue}>${item.usdValue.toFixed(2)}</Text>
-              <Text style={[styles.priceChange, { color: changeColor }]}>
-                {change24h >= 0 ? '+' : ''}{change24h.toFixed(2)}% {changeIcon}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.tokenPrice}>
-            <Text style={styles.priceLabel}>Price: ${price < 1 ? price.toFixed(6) : price.toFixed(2)}</Text>
-            {item.marketData && (
-              <Text style={styles.marketCapLabel}>
-                Market Cap: ${item.marketData.usd_market_cap >= 1e9 ? 
-                  `${(item.marketData.usd_market_cap / 1e9).toFixed(1)}B` : 
-                  `${(item.marketData.usd_market_cap / 1e6).toFixed(1)}M`}
-              </Text>
-            )}
-          </View>
-        </Card.Content>
-      </Card>
-    );
-  };
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" />
-          <Text style={styles.loadingText}>Loading wallet details...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!wallet) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Wallet not found</Text>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.backButton}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Simple Header */}
-      {/* <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconButton icon="arrow-left" size={24} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Wallet Details</Text>
-      </View> */}
-
-      {/* Tokens List */}
-      <View style={styles.tokensSection}>
-        <Text style={styles.sectionTitle}>Assets ({tokensWithValue.length})</Text>
-        
-        {tokensWithValue.length > 0 ? (
-          <FlatList
-            data={tokensWithValue}
-            renderItem={renderTokenItem}
-            keyExtractor={(item) => item.symbol}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.tokensList}
-          />
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No tokens found in this wallet</Text>
-          </View>
-        )}
-      </View>
-    </SafeAreaView>
-  );
-}
-
+// Define styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F0E8', // Light beige from swatch
+  },
+  summaryContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  walletAddress: {
+    fontSize: 14,
+    fontFamily: 'monospace',
+    color: '#8B7355', // Muted brown
+    marginTop: 8,
   },
   header: {
     flexDirection: 'row',
@@ -337,8 +36,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  backButton: {
+  backButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginRight: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#A0522D',
+    fontWeight: '500',
+  },
+  backButton: {
+    fontSize: 16,
+    color: '#A0522D',
+    fontWeight: '500',
   },
   portfolioSummary: {
     flexDirection: 'row',
@@ -481,7 +192,6 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 16,
   },
-
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -493,4 +203,372 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
+  scrollContent: {
+    paddingBottom: 20,
+  },
 });
+
+// Define interfaces
+interface Token {
+  symbol: string;
+  balance: string;
+  decimals: number;
+  price?: number;
+  value?: number;
+  usdValue?: number;
+  priceChange24h?: number | null;
+  marketData?: {
+    usd: number;
+    usd_market_cap: number;
+    usd_24h_vol: number;
+    usd_24h_change: number;
+  };
+}
+
+interface RealToken {
+  symbol: string;
+  name: string;
+  balance: string;
+  decimals: number;
+  contractAddress?: string;
+  isNative?: boolean;
+  price: number;
+  usdValue: number;
+  priceChange24h: number | null;
+  lastPriceUpdate?: string | null;
+}
+
+interface Wallet {
+  address: string;
+  balance: string;
+  tokens: Token[];
+  totalValue?: number;
+}
+
+interface PortfolioResponse {
+  address: string;
+  balance: string;
+  tokens: Token[];
+  totalValue: number;
+  timestamp: string;
+}
+
+interface RealHoldingsResponse {
+  success: boolean;
+  address: string;
+  tokens: RealToken[];
+  totalValue: number;
+  tokenCount: number;
+  timestamp: string;
+  message?: string;
+}
+
+// Use RealToken as our main token interface since it already has usdValue
+type TokenWithValue = RealToken;
+
+export default function WalletDetailsScreen() {
+  // Tab navigation is handled by the Tabs component in the return statement
+  const { address } = useLocalSearchParams<{ address: string }>();
+  const router = useRouter();
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [tokensWithValue, setTokensWithValue] = useState<TokenWithValue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [totalValue, setTotalValue] = useState(0);
+
+  useEffect(() => {
+    if (address) {
+      loadWalletDetails();
+    }
+  }, [address]);
+
+  useEffect(() => {
+    if (wallet) {
+      calculateTokenValues();
+    }
+  }, [wallet]);
+
+  const loadWalletDetails = async () => {
+    try {
+      if (!address) return;
+
+      // First, load from AsyncStorage immediately for fast display
+      const storedWallets = await AsyncStorage.getItem('wallets');
+      if (storedWallets) {
+        const wallets: Wallet[] = JSON.parse(storedWallets);
+        const foundWallet = wallets.find(w => w.address === address);
+        if (foundWallet) {
+          setWallet(foundWallet);
+          setTotalValue(foundWallet.totalValue || 0);
+          
+          // Convert stored wallet data to TokenWithValue format
+          const storedTokens: TokenWithValue[] = foundWallet.tokens.map(token => ({
+            symbol: token.symbol,
+            name: token.symbol,
+            balance: token.balance,
+            decimals: token.decimals,
+            price: token.price || 0,
+            usdValue: token.usdValue || 0,
+            priceChange24h: token.priceChange24h || null
+          }));
+          
+          // Sort by USD value
+          const sortedTokens = [...storedTokens].sort((a, b) => b.usdValue - a.usdValue);
+          setTokensWithValue(sortedTokens);
+          setLoading(false);
+        }
+      }
+
+      // Then try to fetch fresh data from backend (only once)
+      try {
+        const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.WALLET_REAL_HOLDINGS, { address }));
+        const realHoldingsData: RealHoldingsResponse = await response.json();
+        
+        if (realHoldingsData.success && realHoldingsData.tokens) {
+          // Update with fresh data
+          setTotalValue(realHoldingsData.totalValue);
+          
+          const sortedTokens = [...realHoldingsData.tokens].sort((a, b) => b.usdValue - a.usdValue);
+          setTokensWithValue(sortedTokens);
+          
+          setWallet({
+            address: realHoldingsData.address,
+            balance: realHoldingsData.tokens.find(t => t.isNative)?.balance || '0',
+            tokens: realHoldingsData.tokens,
+            totalValue: realHoldingsData.totalValue
+          });
+
+          // Update AsyncStorage with fresh data
+          if (storedWallets) {
+            const wallets: Wallet[] = JSON.parse(storedWallets);
+            const updatedWallets = wallets.map(w => 
+              w.address === address ? {
+                address: realHoldingsData.address,
+                tokens: realHoldingsData.tokens,
+                totalValue: realHoldingsData.totalValue,
+                tokenCount: realHoldingsData.tokenCount
+              } : w
+            );
+            await AsyncStorage.setItem('wallets', JSON.stringify(updatedWallets));
+          }
+        }
+      } catch (apiError) {
+        console.log('API call failed, using cached data:', apiError);
+        // We already have cached data loaded, so just continue
+      }
+    } catch (error) {
+      console.error('Error loading wallet details:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateTokenValues = () => {
+    if (!wallet) return;
+    
+    // If we already have tokens with value from the real-holdings endpoint,
+    // we don't need to recalculate anything
+    if (tokensWithValue.length > 0 && tokensWithValue[0].usdValue !== undefined) {
+      return;
+    }
+    
+    let portfolioValue = 0;
+    const allTokens: TokenWithValue[] = [];
+    
+    // Add tokens from wallet data
+    wallet.tokens.forEach(token => {
+      const balance = parseFloat(token.balance);
+      const price = token.price || 0;
+      const usdValue = token.value || (balance * price);
+      portfolioValue += usdValue;
+
+      allTokens.push({
+        symbol: token.symbol,
+        name: token.symbol, // Legacy data doesn't have name
+        balance: token.balance,
+        decimals: token.decimals,
+        price: price,
+        usdValue: usdValue,
+        priceChange24h: token.marketData?.usd_24h_change || null
+      });
+    });
+    
+    // Sort by USD value descending
+    allTokens.sort((a, b) => b.usdValue - a.usdValue);
+    
+    setTokensWithValue(allTokens);
+    setTotalValue(portfolioValue);
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadWalletDetails();
+    setRefreshing(false);
+  };
+
+  const getTokenIcon = (symbol: string) => {
+    const icons: { [key: string]: string } = {
+      'ETH': '⟠',
+      'BTC': '₿',
+      'USDT': '₮',
+      'USDC': 'Ⓤ',
+      'LINK': '🔗',
+      'UNI': '🦄',
+      'XRP': '◉',
+      'BCH': '₿',
+      'XMR': 'ɱ'
+    };
+    return icons[symbol] || '●';
+  };
+
+  const formatAddress = (addr: string) => {
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
+
+  const renderTokenItem = ({ item }: { item: TokenWithValue }) => {
+    const change24h = item.priceChange24h || 0;
+    const changeColor = change24h >= 0 ? '#00C853' : '#FF1744';
+    const changeIcon = change24h >= 0 ? '↗' : '↘';
+    const price = item.price || 0;
+    
+    return (
+      <Card style={styles.tokenCard}>
+        <Card.Content style={styles.tokenContent}>
+          <View style={styles.tokenHeader}>
+            <View style={styles.tokenInfo}>
+              <Text style={styles.tokenIcon}>{getTokenIcon(item.symbol)}</Text>
+              <View>
+                <Text style={styles.tokenSymbol}>{item.symbol}</Text>
+                <Text style={styles.tokenBalance}>
+                  {parseFloat(item.balance).toFixed(4)} {item.symbol}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.tokenValues}>
+              <Text style={styles.tokenValue}>${item.usdValue.toFixed(2)}</Text>
+              {item.priceChange24h !== null && (
+                <Text style={[styles.priceChange, { color: changeColor }]}>
+                  {change24h >= 0 ? '+' : ''}{change24h.toFixed(2)}% {changeIcon}
+                </Text>
+              )}
+            </View>
+          </View>
+          <View style={styles.tokenPrice}>
+            <Text style={styles.priceLabel}>Price: ${price < 1 ? price.toFixed(6) : price.toFixed(2)}</Text>
+            {item.name && item.name !== item.symbol && (
+              <Text style={styles.marketCapLabel}>{item.name}</Text>
+            )}
+          </View>
+        </Card.Content>
+      </Card>
+    );
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" />
+          <Text style={styles.loadingText}>Loading wallet details...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!wallet) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Wallet not found</Text>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={styles.backButton}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  
+  return (
+    <>
+      <Stack.Screen options={{
+        headerShown: false,
+      }} />
+      <Tabs
+        screenOptions={{
+          tabBarStyle: {
+            backgroundColor: '#FFFFFF',
+            borderTopColor: '#E8DDD0',
+          },
+          tabBarActiveTintColor: '#A0522D',
+          tabBarInactiveTintColor: '#8B7355',
+          tabBarShowLabel: true,
+          headerShown: false
+        }}
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Wallets',
+            tabBarIcon: ({ color }) => <Ionicons name="wallet-outline" size={24} color={color} />,
+          }}
+          redirect={true}
+        />
+        <Tabs.Screen
+          name="tokens"
+          options={{
+            title: 'Tokens',
+            tabBarIcon: ({ color }) => <Ionicons name="logo-bitcoin" size={24} color={color} />,
+          }}
+          redirect={true}
+        />
+        <Tabs.Screen
+          name="analysis"
+          options={{
+            title: 'Analysis',
+            tabBarIcon: ({ color }) => <Ionicons name="analytics-outline" size={24} color={color} />,
+          }}
+          redirect={true}
+        />
+      </Tabs>
+      
+      <SafeAreaView style={styles.container}>
+        {/* Header with Back Button */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButtonContainer}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Wallet Details</Text>
+        </View>
+        
+        {/* Scrollable Content */}
+        <FlatList
+          data={tokensWithValue.filter(token => token.usdValue >= 0.01)}
+          renderItem={renderTokenItem}
+          keyExtractor={(item) => item.symbol}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          ListHeaderComponent={() => (
+            <View style={styles.summaryContainer}>
+              <Card style={styles.summaryCard}>
+                <Card.Content>
+                  <Text style={styles.summaryLabel}>Total Portfolio Value</Text>
+                  <Text style={styles.summaryValue}>${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                  <Text style={styles.walletAddress}>{formatAddress(address || '')}</Text>
+                </Card.Content>
+              </Card>
+            </View>
+          )}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No tokens found in this wallet</Text>
+            </View>
+          )}
+        />
+      </SafeAreaView>
+    </>
+  );
+}

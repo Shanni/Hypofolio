@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, FlatList, TouchableOpacity, Dimensions } from 'react-native';
+import { StyleSheet, View, FlatList, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { Text, Card, Button, TextInput, IconButton, ActivityIndicator, FAB } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -10,15 +10,24 @@ import { getApiUrl, API_CONFIG } from '../../src/config/api';
 
 // Define wallet and token interfaces
 interface Token {
+  contractAddress?: string;
   symbol: string;
+  name: string;
   balance: string;
+  rawBalance?: string;
   decimals: number;
+  isNative?: boolean;
+  price?: number;
+  usdValue?: number;
+  priceChange24h?: number;
+  marketCap?: number;
 }
 
 interface Wallet {
   address: string;
-  balance: string;
   tokens: Token[];
+  totalValue: number;
+  tokenCount?: number;
 }
 
 export default function WalletsScreen() {
@@ -28,6 +37,8 @@ export default function WalletsScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showAddWallet, setShowAddWallet] = useState(false);
+  const [resolvedAddress, setResolvedAddress] = useState('');
+  const [isResolvingName, setIsResolvingName] = useState(false);
   
   // Load wallets from localStorage on component mount
   useEffect(() => {
@@ -40,7 +51,7 @@ export default function WalletsScreen() {
       if (storedWallets) {
         setWallets(JSON.parse(storedWallets));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading wallets:', error);
     }
   };
@@ -49,24 +60,64 @@ export default function WalletsScreen() {
     try {
       await AsyncStorage.setItem('wallets', JSON.stringify(updatedWallets));
       setWallets(updatedWallets);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving wallets:', error);
+    }
+  };
+
+  const resolveHLName = async (input: string): Promise<string> => {
+    // Check if input looks like an HL domain (contains .hl)
+    if (!input.includes('.hl')) {
+      return input; // Return as-is if not an HL domain
+    }
+    
+    try {
+      setIsResolvingName(true);
+      const response = await fetch(`http://localhost:4005/api/hlnames/resolve/${input}`);
+      const data = await response.json();
+      
+      if (data.success && data.data && data.data.address) {
+        setResolvedAddress(data.data.address);
+        return data.data.address;
+      } else {
+        throw new Error(data.error || 'Failed to resolve HL name');
+      }
+    } catch (error: any) {
+      throw new Error(`Could not resolve "${input}": ${error.message}`);
+    } finally {
+      setIsResolvingName(false);
     }
   };
 
   const handleAddWallet = async () => {
     if (!address.trim()) {
-      setError('Please enter a wallet address');
+      setError('Please enter a wallet address or HL domain');
       return;
     }
     
     setLoading(true);
     setError('');
+    setResolvedAddress('');
     
     try {
+      // Resolve HL name if needed
+      let finalAddress = address.trim();
+      try {
+        finalAddress = await resolveHLName(address.trim());
+      } catch (resolveError: any) {
+        setError(resolveError.message);
+        return;
+      }
+      
+      // Validate Ethereum address format
+      if (!finalAddress.startsWith('0x') || finalAddress.length !== 42) {
+        setError('Invalid Ethereum address format');
+        return;
+      }
+      
       // Check if wallet already exists
       const walletExists = wallets.some(wallet => 
-        wallet.address.toLowerCase() === address.toLowerCase()
+        wallet.address.toLowerCase() === finalAddress.toLowerCase()
       );
       
       if (walletExists) {
@@ -74,12 +125,12 @@ export default function WalletsScreen() {
         return;
       }
       
-      // Fetch wallet data from API (mock for now)
-      console.log('Fetching wallet data for address:', address);
+      // Fetch real wallet data from blockchain API
+      console.log('Fetching real wallet data for address:', finalAddress);
       let walletData;
       try {
-        const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.WALLET + `/${address}`);
-        console.log('Calling API:', apiUrl);
+        const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.WALLET_REAL_HOLDINGS, { address: finalAddress });
+        console.log('Calling real holdings API:', apiUrl);
         const response = await fetch(apiUrl);
         console.log('Response status:', response.status);
         
@@ -89,24 +140,30 @@ export default function WalletsScreen() {
         }
         
         walletData = await response.json();
-        console.log('Wallet data received:', walletData);
+        console.log('Real wallet data received:', walletData);
+        
+        if (!walletData.success) {
+          throw new Error(walletData.error || 'Failed to fetch wallet data');
+        }
       } catch (fetchError: any) {
         console.error('Fetch error:', fetchError);
         throw new Error(`Network error: ${fetchError.message}`);
       }
       
       const newWallet = {
-        address: address,
-        balance: walletData?.balance || '0',
-        tokens: walletData?.tokens || []
+        address: finalAddress,
+        tokens: walletData?.tokens || [],
+        totalValue: walletData?.totalValue || 0,
+        tokenCount: walletData?.tokenCount || 0
       };
       
       const updatedWallets = [...wallets, newWallet];
       await saveWallets(updatedWallets);
       
       setAddress('');
+      setResolvedAddress('');
       setShowAddWallet(false);
-    } catch (error) {
+    } catch (error: any) {
       setError(error.message || 'Failed to add wallet');
     } finally {
       setLoading(false);
@@ -133,12 +190,12 @@ export default function WalletsScreen() {
 
   const handleRefreshWallet = async (address: string) => {
     try {
-      // Fetch updated wallet data from API
-      console.log('Refreshing wallet data for address:', address);
+      // Fetch updated real wallet data from blockchain API
+      console.log('Refreshing real wallet data for address:', address);
       let walletData;
       try {
-        const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.WALLET + `/${address}`);
-        console.log('Calling refresh API:', apiUrl);
+        const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.WALLET_REAL_HOLDINGS, { address });
+        console.log('Calling refresh real holdings API:', apiUrl);
         const response = await fetch(apiUrl);
         console.log('Refresh response status:', response.status);
         
@@ -148,21 +205,30 @@ export default function WalletsScreen() {
         }
         
         walletData = await response.json();
-        console.log('Refreshed wallet data:', walletData);
+        console.log('Refreshed real wallet data:', walletData);
+        
+        if (!walletData.success) {
+          throw new Error(walletData.error || 'Failed to refresh wallet data');
+        }
       } catch (fetchError: any) {
         console.error('Refresh fetch error:', fetchError);
         throw new Error(`Network error during refresh: ${fetchError.message}`);
       }
       
-      // Update wallet in state
+      // Update wallet in state with real data
       const updatedWallets = wallets.map(wallet => 
         wallet.address === address ? 
-        { ...wallet, balance: walletData?.balance || wallet.balance } : 
+        { 
+          ...wallet, 
+          tokens: walletData?.tokens || wallet.tokens,
+          totalValue: walletData?.totalValue || wallet.totalValue,
+          tokenCount: walletData?.tokenCount || wallet.tokenCount
+        } : 
         wallet
       );
       
       await saveWallets(updatedWallets);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error refreshing wallet:', error);
     }
   };
@@ -199,7 +265,7 @@ export default function WalletsScreen() {
       );
       
       await saveWallets(updatedWallets);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating tokens:', error);
     }
   };
@@ -208,37 +274,19 @@ export default function WalletsScreen() {
     router.push(`/wallet/${wallet.address}`);
   };
 
-  // Helper functions for price calculation
-  const getMockPrice = (symbol: string): number => {
-    const prices: { [key: string]: number } = {
-      'ETH': 2300,
-      'BTC': 45000,
-      'USDT': 1,
-      'USDC': 1,
-      'LINK': 15,
-      'UNI': 8,
-      'AAVE': 120,
-      'COMP': 80,
-    };
-    return prices[symbol] || Math.random() * 100;
-  };
-
   const calculateWalletTotalValue = (wallet: Wallet): number => {
-    let totalValue = 0;
-    
-    // Add ETH balance value
-    if (wallet.balance && parseFloat(wallet.balance) > 0) {
-      const ethBalance = parseFloat(wallet.balance);
-      const ethPrice = getMockPrice('ETH');
-      totalValue += ethBalance * ethPrice;
+    // Use the totalValue from the API response if available
+    if (wallet.totalValue !== undefined) {
+      return wallet.totalValue;
     }
     
-    // Add token values
+    // Fallback: calculate from token USD values
+    let totalValue = 0;
     if (wallet.tokens) {
       wallet.tokens.forEach(token => {
-        const balance = parseFloat(token.balance);
-        const price = getMockPrice(token.symbol);
-        totalValue += balance * price;
+        if (token.usdValue) {
+          totalValue += token.usdValue;
+        }
       });
     }
     
@@ -256,11 +304,13 @@ export default function WalletsScreen() {
 
   const renderWalletItem = ({ item }: { item: Wallet }) => {
     const totalValue = calculateWalletTotalValue(item);
+    const tokenCount = item.tokenCount || item.tokens?.length || 0;
+    const topTokens = item.tokens?.slice(0, 3) || [];
 
     return (
       <TouchableOpacity onPress={() => handleWalletPress(item)} style={styles.walletCardContainer}>
         <View style={styles.walletCard}>
-          {/* Simple Header with Icon and Actions */}
+          {/* Header with Icon and Actions */}
           <View style={styles.walletHeader}>
             <View style={styles.walletIconSimple}>
               <Text style={styles.walletIconText}>💳</Text>
@@ -287,22 +337,74 @@ export default function WalletsScreen() {
             </View>
           </View>
           
-          {/* Address Display with Title */}
-          <View style={styles.addressSection}>
-            <Text style={styles.sectionTitle}>Wallet Address</Text>
-            <Text style={styles.addressText}>{item.address}</Text>
-          </View>
-          
-          {/* Value Display with Title */}
-          <View style={styles.valueSection}>
-            <Text style={styles.sectionTitle}>Portfolio Value</Text>
+          {/* Address and Portfolio Value */}
+          <View style={styles.walletInfo}>
+            <Text style={styles.addressText}>
+              {item.address.slice(0, 6)}...{item.address.slice(-4)}
+            </Text>
             <Text style={styles.valueAmount}>
               ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
           </View>
+          
+          {/* Top Tokens Preview */}
+          {topTokens.length > 0 && (
+            <View style={styles.tokensPreview}>
+              <Text style={styles.tokensPreviewTitle}>Top Assets</Text>
+              <View style={styles.tokensList}>
+                {topTokens.map((token, index) => {
+                  const tokenValue = token.usdValue || (parseFloat(token.balance) * (token.price || 0));
+                  return (
+                    <View key={`${token.symbol}-${index}`} style={styles.tokenItem}>
+                      <View style={styles.tokenInfo}>
+                        <Text style={styles.tokenIcon}>{getTokenIcon(token.symbol)}</Text>
+                        <View style={styles.tokenDetails}>
+                          <Text style={styles.tokenSymbol}>{token.symbol}</Text>
+                          <Text style={styles.tokenBalance}>
+                            {parseFloat(token.balance).toFixed(4)}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.tokenValue}>
+                        ${tokenValue.toFixed(2)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {tokenCount > 3 && (
+                <Text style={styles.moreTokensText}>
+                  +{tokenCount - 3} more token{tokenCount - 3 !== 1 ? 's' : ''}
+                </Text>
+              )}
+            </View>
+          )}
+          
+          {/* Empty State for No Tokens */}
+          {tokenCount === 0 && (
+            <View style={styles.emptyTokensState}>
+              <Text style={styles.emptyTokensText}>No tokens found</Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     );
+  };
+
+  const getTokenIcon = (symbol: string) => {
+    const icons: { [key: string]: string } = {
+      'ETH': '⟠',
+      'BTC': '₿',
+      'USDT': '₮',
+      'USDC': 'Ⓤ',
+      'LINK': '🔗',
+      'UNI': '🦄',
+      'XRP': '◉',
+      'BCH': '₿',
+      'XMR': 'ɱ',
+      'YRISE': '📈'
+    };
+    return icons[symbol] || '●';
   };
 
   const renderEmptyWalletList = () => {
@@ -323,7 +425,7 @@ export default function WalletsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text variant="headlineMedium" style={styles.title}>My Hypefolio</Text>
+        <Text variant="headlineMedium" style={styles.title}>Hypofolio</Text>
       </View>
       
       {/* Total Portfolio Value */}
@@ -337,41 +439,84 @@ export default function WalletsScreen() {
         </View>
       )}
       
-      {showAddWallet ? (
-        <Card style={styles.addWalletCard}>
-          <Card.Content>
-            <TextInput
-              label="Wallet Address"
-              value={address}
-              onChangeText={(text) => {
-                setAddress(text);
-                setError('');
-              }}
-              style={styles.input}
-              error={!!error}
-            />
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            
-            <View style={styles.buttonContainer}>
-              <Button 
-                mode="outlined" 
+      {showAddWallet && (
+        <View style={styles.addWalletOverlay}>
+          <View style={styles.addWalletModal}>
+            <View style={styles.addWalletHeader}>
+              <Text style={styles.addWalletTitle}>Add New Wallet</Text>
+              <IconButton
+                icon="close"
+                size={24}
+                iconColor="#8B7355"
                 onPress={() => setShowAddWallet(false)}
-                style={styles.cancelButton}
+              />
+            </View>
+            
+            <View style={styles.addWalletContent}>
+              <Text style={styles.inputLabel}>Wallet Address or HL Domain</Text>
+              <TextInput
+                value={address}
+                onChangeText={(text) => {
+                  setAddress(text);
+                  setError('');
+                  setResolvedAddress('');
+                }}
+                style={styles.addressInput}
+                placeholder="0x... or name.hl"
+                placeholderTextColor="#8B7355"
+                multiline
+                numberOfLines={2}
+                textAlignVertical="top"
+              />
+              
+              {isResolvingName && (
+                <View style={styles.resolvingContainer}>
+                  <ActivityIndicator size="small" color="#A0522D" />
+                  <Text style={styles.resolvingText}>Resolving HL domain...</Text>
+                </View>
+              )}
+              
+              {resolvedAddress && (
+                <View style={styles.resolvedContainer}>
+                  <Text style={styles.resolvedLabel}>✅ Resolved to:</Text>
+                  <Text style={styles.resolvedAddress}>{resolvedAddress}</Text>
+                </View>
+              )}
+              
+              {error ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>⚠️ {error}</Text>
+                </View>
+              ) : null}
+              
+              <Text style={styles.helpText}>
+                Enter an Ethereum wallet address (0x...) or Hyperliquid domain (name.hl) to track its portfolio and tokens.
+              </Text>
+            </View>
+            
+            <View style={styles.addWalletActions}>
+              <TouchableOpacity 
+                style={styles.cancelButtonNew}
+                onPress={() => setShowAddWallet(false)}
               >
-                Cancel
-              </Button>
-              <Button 
-                mode="contained" 
-                onPress={handleAddWallet} 
-                loading={loading}
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.addButtonNew, loading && styles.addButtonDisabled]}
+                onPress={handleAddWallet}
                 disabled={loading}
               >
-                Add Wallet
-              </Button>
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.addButtonText}>Add Wallet</Text>
+                )}
+              </TouchableOpacity>
             </View>
-          </Card.Content>
-        </Card>
-      ) : null}
+          </View>
+        </View>
+      )}
       
       {wallets.length === 0 && !showAddWallet ? (
         <View style={styles.emptyContainer}>
@@ -402,7 +547,7 @@ export default function WalletsScreen() {
         <FAB
           icon="plus"
           style={styles.fab}
-          onPress={() => setShowAddWallet(true)}
+            onPress={() => setShowAddWallet(true)}
         />
       )}
     </SafeAreaView>
@@ -452,13 +597,14 @@ const styles = StyleSheet.create<any>({
     backgroundColor: '#FFFFFF', // Pure white card background
     borderRadius: 16,
     padding: 20,
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#A0522D', // Rich brown shadow
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
     borderWidth: 1,
-    borderColor: '#F0EBE3', // Very light beige border
+    borderColor: '#E8DDD0', // Light beige border
+    minHeight: 180,
   },
   walletHeader: {
     flexDirection: 'row',
@@ -483,7 +629,10 @@ const styles = StyleSheet.create<any>({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  addressSection: {
+  walletInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
@@ -503,43 +652,243 @@ const styles = StyleSheet.create<any>({
     fontFamily: 'monospace',
     lineHeight: 20,
   },
-  valueSection: {
+  tokenCountText: {
+    fontSize: 12,
+    color: '#A0522D', // Rich brown accent
+    fontWeight: '500',
     marginTop: 4,
-    alignItems: 'flex-end',
-    width: '100%',
   },
   valueAmount: {
-    fontSize: 24,
+    fontSize: 20,
     color: '#A0522D', // Rich brown accent
     fontWeight: 'bold',
     letterSpacing: 0.5,
-    textAlign: 'right',
-    alignSelf: 'flex-end',
   },
-  addWalletCard: {
-    margin: 16,
-    borderRadius: 8,
+  tokensPreview: {
+    marginTop: 8,
   },
-  input: {
+  tokensPreviewTitle: {
+    fontSize: 12,
+    color: '#8B7355',
+    fontWeight: '600',
     marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  tokensList: {
+    gap: 6,
+  },
+  tokenItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  tokenInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  tokenIcon: {
+    fontSize: 16,
+    width: 24,
+    textAlign: 'center',
+    marginRight: 8,
+  },
+  tokenDetails: {
+    flex: 1,
+  },
+  tokenSymbol: {
+    fontSize: 14,
+    color: '#3D2914',
+    fontWeight: '600',
+  },
+  tokenBalance: {
+    fontSize: 12,
+    color: '#8B7355',
+    marginTop: 1,
+  },
+  tokenValue: {
+    fontSize: 14,
+    color: '#A0522D',
+    fontWeight: '600',
+  },
+  moreTokensText: {
+    fontSize: 12,
+    color: '#8B7355',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  emptyTokensState: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  emptyTokensText: {
+    fontSize: 14,
+    color: '#8B7355',
+    fontStyle: 'italic',
+  },
+  addWalletOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  addWalletModal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    margin: 20,
+    maxWidth: 400,
+    width: '90%',
+    elevation: 10,
+    shadowColor: '#A0522D',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+  },
+  addWalletHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F0E8',
+  },
+  addWalletTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#3D2914',
+  },
+  addWalletContent: {
+    padding: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3D2914',
+    marginBottom: 8,
+  },
+  addressInput: {
+    backgroundColor: '#F5F0E8',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 14,
+    fontFamily: 'monospace',
+    color: '#3D2914',
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  errorContainer: {
+    backgroundColor: '#FFE5E5',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#FFB3B3',
   },
   errorText: {
-    color: 'red',
-    marginBottom: 8,
+    color: '#D32F2F',
+    fontSize: 14,
+    fontWeight: '500',
   },
-  buttonContainer: {
+  helpText: {
+    fontSize: 12,
+    color: '#8B7355',
+    marginTop: 12,
+    lineHeight: 16,
+  },
+  addWalletActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 16,
+    padding: 20,
+    paddingTop: 10,
+    gap: 12,
   },
-  cancelButton: {
-    marginRight: 8,
+  cancelButtonNew: {
+    flex: 1,
+    backgroundColor: '#F5F0E8',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+  },
+  cancelButtonText: {
+    color: '#8B7355',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  addButtonNew: {
+    flex: 1,
+    backgroundColor: '#A0522D',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  addButtonDisabled: {
+    opacity: 0.6,
+  },
+  addButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  resolvingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#F5F0E8',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+  },
+  resolvingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#8B7355',
+    fontWeight: '500',
+  },
+  resolvedContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#E8F5E8',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  resolvedLabel: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  resolvedAddress: {
+    fontSize: 14,
+    color: '#1B5E20',
+    fontFamily: 'monospace',
+    fontWeight: '500',
   },
   fab: {
     position: 'absolute',
     margin: 16,
     right: 0,
-    bottom: 0,
+    bottom: 80, // Move above tab bar
+    backgroundColor: '#A0522D',
+    elevation: 10,
+    shadowColor: '#A0522D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    zIndex: 9999,
   },
   // New wallet display styles
   walletAddressHeader: {

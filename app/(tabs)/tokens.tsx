@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { Text, Card, Searchbar, Chip, IconButton } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { getApiUrl, API_CONFIG } from '../../src/config/api';
 
 // Define interfaces for market data
 interface MarketToken {
@@ -40,7 +42,7 @@ export default function TokensScreen() {
   const loadMarketData = async () => {
     try {
       // Fetch real market data from backend
-      const response = await fetch('http://localhost:4001/api/market/top?limit=50');
+      const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.MARKET_TOP) + '?limit=50');
       const result: ApiResponse = await response.json();
       
       if (result.success && result.data) {

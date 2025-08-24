@@ -3,6 +3,7 @@ import { StyleSheet, View, ScrollView, Alert } from 'react-native';
 import { Text, Card, Button, ActivityIndicator, Chip } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getApiUrl, API_CONFIG } from '../../src/config/api';
 
 interface AnalysisData {
   totalValue: number;
@@ -10,6 +11,22 @@ interface AnalysisData {
   riskLevel: 'Low' | 'Medium' | 'High';
   recommendation: string;
   diversification: number;
+  tokenCount: number;
+  largestHolding: {
+    symbol: string;
+    percentage: number;
+  };
+}
+
+interface WalletHolding {
+  address: string;
+  tokens: Array<{
+    symbol: string;
+    balance: string;
+    price: number;
+    usdValue: number;
+  }>;
+  totalValue: number;
 }
 
 export default function AnalysisScreen() {
@@ -23,32 +40,126 @@ export default function AnalysisScreen() {
   const loadAnalysis = async () => {
     try {
       setLoading(true);
-      // Simulate AI analysis based on wallet data
+      
+      // Get real wallet data from AsyncStorage
       const storedWallets = await AsyncStorage.getItem('wallets');
-      if (storedWallets) {
-        const wallets = JSON.parse(storedWallets);
-        
-        // Mock AI analysis
-        const mockAnalysis: AnalysisData = {
-          totalValue: 8763.58,
-          topPerformer: 'ETH',
-          riskLevel: 'Medium',
-          recommendation: 'Consider diversifying into more stable assets like USDC. Your ETH holdings show strong potential but adding some DeFi tokens could improve your portfolio balance.',
-          diversification: 65
-        };
-        
-        // Simulate API delay
-        setTimeout(() => {
-          setAnalysis(mockAnalysis);
-          setLoading(false);
-        }, 2000);
-      } else {
+      if (!storedWallets) {
         setLoading(false);
+        return;
       }
+      
+      const wallets = JSON.parse(storedWallets);
+      const allHoldings: WalletHolding[] = [];
+      
+      // Fetch real holdings for each wallet
+      for (const wallet of wallets) {
+        try {
+          const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.WALLET_REAL_HOLDINGS, { address: wallet.address }));
+          const data = await response.json();
+          
+          if (data.success && data.tokens) {
+            allHoldings.push({
+              address: wallet.address,
+              tokens: data.tokens,
+              totalValue: data.totalValue || 0
+            });
+          }
+        } catch (error) {
+          console.error(`Error fetching data for wallet ${wallet.address}:`, error);
+        }
+      }
+      
+      // Calculate real analysis from actual data
+      const realAnalysis = calculatePortfolioAnalysis(allHoldings);
+      setAnalysis(realAnalysis);
+      setLoading(false);
+      
     } catch (error) {
       console.error('Error loading analysis:', error);
       setLoading(false);
     }
+  };
+  
+  const calculatePortfolioAnalysis = (holdings: WalletHolding[]): AnalysisData => {
+    if (holdings.length === 0) {
+      return {
+        totalValue: 0,
+        topPerformer: 'N/A',
+        riskLevel: 'Low',
+        recommendation: 'Add some wallets to start building your portfolio.',
+        diversification: 0,
+        tokenCount: 0,
+        largestHolding: { symbol: 'N/A', percentage: 0 }
+      };
+    }
+    
+    // Aggregate all tokens across wallets
+    const allTokens: { [symbol: string]: { totalValue: number; balance: number } } = {};
+    let totalPortfolioValue = 0;
+    
+    holdings.forEach(wallet => {
+      totalPortfolioValue += wallet.totalValue;
+      
+      wallet.tokens.forEach(token => {
+        if (!allTokens[token.symbol]) {
+          allTokens[token.symbol] = { totalValue: 0, balance: 0 };
+        }
+        allTokens[token.symbol].totalValue += token.usdValue;
+        allTokens[token.symbol].balance += parseFloat(token.balance);
+      });
+    });
+    
+    // Find top performer and largest holding
+    let topPerformer = 'N/A';
+    let largestHolding = { symbol: 'N/A', percentage: 0 };
+    let maxValue = 0;
+    
+    Object.entries(allTokens).forEach(([symbol, data]) => {
+      if (data.totalValue > maxValue) {
+        maxValue = data.totalValue;
+        topPerformer = symbol;
+        largestHolding = {
+          symbol,
+          percentage: (data.totalValue / totalPortfolioValue) * 100
+        };
+      }
+    });
+    
+    // Calculate diversification score
+    const tokenCount = Object.keys(allTokens).length;
+    const diversification = Math.min(100, Math.max(0, 
+      100 - (largestHolding.percentage - 20) // Penalize if largest holding > 20%
+    ));
+    
+    // Determine risk level
+    let riskLevel: 'Low' | 'Medium' | 'High' = 'Medium';
+    if (largestHolding.percentage > 70) {
+      riskLevel = 'High';
+    } else if (largestHolding.percentage < 30 && tokenCount > 5) {
+      riskLevel = 'Low';
+    }
+    
+    // Generate AI recommendation
+    let recommendation = '';
+    if (largestHolding.percentage > 60) {
+      recommendation = `Your portfolio is heavily concentrated in ${topPerformer} (${largestHolding.percentage.toFixed(1)}%). Consider diversifying into other assets to reduce risk.`;
+    } else if (tokenCount < 3) {
+      recommendation = 'Your portfolio has limited diversification. Consider adding more different tokens to spread risk.';
+    } else if (diversification > 80) {
+      recommendation = 'Excellent diversification! Your portfolio shows good balance across different assets.';
+    } else {
+      recommendation = `Your ${topPerformer} position is performing well. Consider rebalancing if it becomes too dominant in your portfolio.`;
+    }
+    
+    return {
+      totalValue: totalPortfolioValue,
+      topPerformer,
+      riskLevel,
+      recommendation,
+      diversification: Math.round(diversification),
+      tokenCount,
+      largestHolding
+    };
   };
 
   const getRiskColor = (risk: string) => {
